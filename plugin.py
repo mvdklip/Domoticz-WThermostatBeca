@@ -7,7 +7,7 @@
 # https://github.com/fashberg/WThermostatBeca#json-structures
 
 """
-<plugin key="WThermostatBeca" name="WThermostatBeca" author="mvdklip" version="1.0.0">
+<plugin key="WThermostatBeca" name="WThermostatBeca" author="mvdklip" version="1.1.0">
     <description>
         <h2>WThermostatBeca Plugin</h2><br/>
         <h3>Features</h3>
@@ -20,13 +20,13 @@
         <param field="Port" label="Port" width="30px" required="true" default="80"/>
         <param field="Mode3" label="Query interval" width="75px" required="true">
             <options>
-                <option label="5 sec" value="1" default="true"/>
-                <option label="15 sec" value="3"/>
-                <option label="30 sec" value="6"/>
-                <option label="1 min" value="12"/>
-                <option label="3 min" value="36"/>
-                <option label="5 min" value="60"/>
-                <option label="10 min" value="120"/>
+                <option label="5 sec" value="5" default="true"/>
+                <option label="15 sec" value="15"/>
+                <option label="30 sec" value="30"/>
+                <option label="1 min" value="60"/>
+                <option label="3 min" value="180"/>
+                <option label="5 min" value="300"/>
+                <option label="10 min" value="600"/>
             </options>
         </param>
         <param field="Mode6" label="Debug" width="75px">
@@ -73,7 +73,7 @@ class BasePlugin:
 
         self.httpConn = Domoticz.Connection(Name="HTTP Connection", Transport="TCP/IP", Protocol="HTTP", Address=Parameters["Address"], Port=Parameters["Port"])
 
-        Domoticz.Heartbeat(5)
+        Domoticz.Heartbeat(1)
 
     def onStop(self):
         Domoticz.Debug("onStop called")
@@ -131,8 +131,6 @@ class BasePlugin:
         elif (Unit == 3) and (Command == "Set Level"):
             SetDeviceProperty(self, 'targetTemperature', Level)
 
-        HandlePendingRequests(self, self.httpConn)
-
         return True
 
     def onDisconnect(self, Connection):
@@ -141,11 +139,10 @@ class BasePlugin:
     def onHeartbeat(self):
         Domoticz.Debug("onHeartbeat called %d" % self.lastPolled)
 
-        if self.lastPolled == 0:
-            if len(self.pendingRequests) == 0:
-                GetDeviceProperties(self)
+        if self.lastPolled == 0 and len(self.pendingRequests) == 0:
+            GetDeviceProperties(self)
 
-            HandlePendingRequests(self, self.httpConn)
+        HandlePendingRequests(self, self.httpConn)
 
         self.lastPolled += 1
         self.lastPolled %= int(Parameters["Mode3"])
@@ -192,10 +189,11 @@ def HandlePendingRequests(plugin, conn):
                 r = plugin.pendingRequests.pop(0)
                 Domoticz.Debug("Connected to %s:%s. Sending pending request %s %s." % (Parameters["Address"], Parameters["Port"], r["Verb"], r["URL"]))
                 conn.Send(r)
-            elif not conn.Connecting() and plugin.numConnectErrors < plugin.maxConnectErrors:
-                Domoticz.Debug("Not connected to %s:%s. Initiate connection." % (Parameters["Address"], Parameters["Port"]))
+            elif conn.Connecting():
+                Domoticz.Debug("Waiting for connection to %s:%s." % (Parameters["Address"], Parameters["Port"]))
+            elif plugin.numConnectErrors < plugin.maxConnectErrors:
+                Domoticz.Debug("Not connected. Connecting to %s:%s." % (Parameters["Address"], Parameters["Port"]))
                 conn.Connect()
-
         elif conn.Connected():
             Domoticz.Debug("Connected to %s:%s but no pending requests. Disconnecting." % (Parameters["Address"], Parameters["Port"]))
             conn.Disconnect()
