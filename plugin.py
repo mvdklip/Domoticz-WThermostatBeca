@@ -126,10 +126,16 @@ class BasePlugin:
 
         if (Unit == 1) and (Command == "On"):
             SetDeviceProperty(self, 'deviceOn', True)
+            if (self.numConnectErrors >= self.maxConnectErrors):
+                Devices[1].Update(nValue=1, sValue="")
         elif (Unit == 1) and (Command == "Off"):
             SetDeviceProperty(self, 'deviceOn', False)
+            if (self.numConnectErrors >= self.maxConnectErrors):
+                Devices[1].Update(nValue=0, sValue="")
         elif (Unit == 3) and (Command == "Set Level"):
             SetDeviceProperty(self, 'targetTemperature', Level)
+            if (self.numConnectErrors >= self.maxConnectErrors):
+                Devices[3].Update(nValue=0, sValue=str(Level))
 
         return True
 
