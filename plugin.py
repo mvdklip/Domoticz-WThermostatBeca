@@ -7,7 +7,7 @@
 # https://github.com/fashberg/WThermostatBeca#json-structures
 
 """
-<plugin key="WThermostatBeca" name="WThermostatBeca" author="mvdklip" version="1.1.0">
+<plugin key="WThermostatBeca" name="WThermostatBeca" author="mvdklip" version="1.1.1">
     <description>
         <h2>WThermostatBeca Plugin</h2><br/>
         <h3>Features</h3>
@@ -212,7 +212,7 @@ def GetDeviceProperties(plugin):
 def SetDeviceProperty(plugin, propName, propValue):
     url = "/things/thermostat/properties/%s" % propName
     data = { propName: propValue }
-    Domoticz.Debug("Setting thermostat property at %s to: %s" % (url, data))
+    Domoticz.Debug("Setting device property at %s to: %s" % (url, data))
     plugin.pendingRequests.append({'Verb':'PUT', 'URL':url, "Headers":plugin.headers, "Data":json.dumps(data)})
 
 def DumpConfigToLog():
