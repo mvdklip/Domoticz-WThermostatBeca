@@ -7,7 +7,7 @@
 # https://github.com/fashberg/WThermostatBeca#json-structures
 
 """
-<plugin key="WThermostatBeca" name="WThermostatBeca" author="mvdklip" version="1.1.1">
+<plugin key="WThermostatBeca" name="WThermostatBeca" author="mvdklip" version="1.2.0">
     <description>
         <h2>WThermostatBeca Plugin</h2><br/>
         <h3>Features</h3>
@@ -50,7 +50,9 @@ class BasePlugin:
     headers = {'Content-Type': 'application/json', 'Accept': 'application/json'}
     httpConn = None
     numConnectErrors = 0
-    maxConnectErrors = 10
+    maxConnectErrors = 5
+    backoffState = False
+    backoffTime = 60
 
     def __init__(self):
         return
@@ -89,7 +91,9 @@ class BasePlugin:
             self.numConnectErrors += 1
             Domoticz.Log("Failed to connect #%d to %s:%s with status %d, error %s" % (self.numConnectErrors, Parameters["Address"], Parameters["Port"], Status, Description))
             if (self.numConnectErrors >= self.maxConnectErrors):
-                Domoticz.Error("Tried %d times to connect to %s:%s. Not trying again..." % (self.numConnectErrors, Parameters["Address"], Parameters["Port"]))
+                Domoticz.Error("Tried %d times to connect to %s:%s. Backing off..." % (self.numConnectErrors, Parameters["Address"], Parameters["Port"]))
+                self.backoffState = True
+                self.lastPolled = 1
 
     def onMessage(self, Connection, Data):
         Domoticz.Debug("onMessage called")
@@ -126,15 +130,15 @@ class BasePlugin:
 
         if (Unit == 1) and (Command == "On"):
             SetDeviceProperty(self, 'deviceOn', True)
-            if (self.numConnectErrors >= self.maxConnectErrors):
+            if (self.backoffState):
                 Devices[1].Update(nValue=1, sValue="")
         elif (Unit == 1) and (Command == "Off"):
             SetDeviceProperty(self, 'deviceOn', False)
-            if (self.numConnectErrors >= self.maxConnectErrors):
+            if (self.backoffState):
                 Devices[1].Update(nValue=0, sValue="")
         elif (Unit == 3) and (Command == "Set Level"):
             SetDeviceProperty(self, 'targetTemperature', Level)
-            if (self.numConnectErrors >= self.maxConnectErrors):
+            if (self.backoffState):
                 Devices[3].Update(nValue=0, sValue=str(Level))
 
         return True
@@ -143,15 +147,23 @@ class BasePlugin:
         Domoticz.Debug("onDisconnect called")
 
     def onHeartbeat(self):
-        Domoticz.Debug("onHeartbeat called %d" % self.lastPolled)
+        Domoticz.Debug("onHeartbeat called %d %d" % (self.lastPolled, self.backoffState))
 
-        if self.lastPolled == 0 and len(self.pendingRequests) == 0:
-            GetDeviceProperties(self)
+        if self.lastPolled == 0:
+            if self.backoffState:
+                self.pendingRequests.clear()
+                self.numConnectErrors = 0
+                self.backoffState = False
+            elif len(self.pendingRequests) == 0:
+                GetDeviceProperties(self)
 
         HandlePendingRequests(self, self.httpConn)
 
         self.lastPolled += 1
-        self.lastPolled %= int(Parameters["Mode3"])
+        if self.backoffState:
+            self.lastPolled %= self.backoffTime
+        else:
+            self.lastPolled %= int(Parameters["Mode3"])
 
 
 global _plugin
@@ -200,9 +212,9 @@ def HandlePendingRequests(plugin, conn):
             elif plugin.numConnectErrors < plugin.maxConnectErrors:
                 Domoticz.Debug("Not connected. Connecting to %s:%s." % (Parameters["Address"], Parameters["Port"]))
                 conn.Connect()
-        elif conn.Connected():
-            Domoticz.Debug("Connected to %s:%s but no pending requests. Disconnecting." % (Parameters["Address"], Parameters["Port"]))
-            conn.Disconnect()
+#        elif conn.Connected():
+#            Domoticz.Debug("Connected to %s:%s but no pending requests. Disconnecting." % (Parameters["Address"], Parameters["Port"]))
+#            conn.Disconnect()
 
 def GetDeviceProperties(plugin):
     url = "/things/thermostat/properties/"
